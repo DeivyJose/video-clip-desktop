@@ -51,6 +51,38 @@ Actualmente la versión pública está orientada a **Linux x86-64**, con soporte
 
 ---
 
+## Capturas
+
+### Interfaz principal
+
+<p align="center">
+  <img
+    src="assets/screenshots/01-main-window.png"
+    width="900"
+    alt="Interfaz principal de VideoClip Desktop"
+  >
+</p>
+
+### Creación de clips
+
+<p align="center">
+  <img
+    src="assets/screenshots/02-clip-mode.png"
+    width="900"
+    alt="Modo de creación de clips de VideoClip Desktop"
+  >
+</p>
+
+### Historial de descargas
+
+<p align="center">
+  <img
+    src="assets/screenshots/03-history.png"
+    width="900"
+    alt="Historial de descargas de VideoClip Desktop"
+  >
+</p>
+
 ## Descargar
 
 Las versiones publicadas de VideoClip Desktop están disponibles en:
