@@ -61,6 +61,9 @@ class DownloadRequest:
     precise_cut: bool = True
     use_brave_cookies: bool = False
 
+    # Si queda vacío, utilizamos el título
+    # original del video.
+    custom_name: str = ""
 
 # ---------------------------------------------------------
 # Validaciones
@@ -437,6 +440,41 @@ def get_video_info(
     )
 
 
+def sanitize_filename(name: str) -> str:
+    """
+    Limpia un nombre personalizado para evitar
+    caracteres problemáticos en Linux, Windows
+    y macOS.
+
+    También eliminamos '%' porque yt-dlp utiliza
+    ese carácter en sus plantillas.
+    """
+
+    name = name.strip()
+
+    invalid_characters = (
+        '<>:"/\\|?*%'
+    )
+
+    for character in invalid_characters:
+        name = name.replace(
+            character,
+            "_"
+        )
+
+    # Evitamos espacios repetidos.
+    name = " ".join(
+        name.split()
+    )
+
+    # Evitamos nombres terminados en punto o espacio.
+    name = name.rstrip(
+        ". "
+    )
+
+    return name
+
+
 # ---------------------------------------------------------
 # Crear el comando de yt-dlp
 # ---------------------------------------------------------
@@ -464,6 +502,30 @@ def build_download_command(
         .resolve()
     )
 
+    # -----------------------------------------------------
+    # NOMBRE DEL ARCHIVO
+    # -----------------------------------------------------
+
+    custom_name = sanitize_filename(
+        request.custom_name
+    )
+
+    if custom_name:
+
+        base_output_name = (
+            custom_name
+        )
+
+    else:
+
+        base_output_name = (
+            "%(title)s [%(id)s]"
+        )
+
+    # -----------------------------------------------------
+    # COMANDO BASE
+    # -----------------------------------------------------
+
     command = [
         sys.executable,
         "-m",
@@ -473,11 +535,11 @@ def build_download_command(
         # línea por línea.
         "--newline",
 
-        # Por ahora no permitiremos playlists.
+        # Por ahora no permitimos playlists.
         "--no-playlist",
 
         # Evita sobrescribir accidentalmente
-        # un archivo existente.
+        # archivos existentes.
         "--no-overwrites",
 
         # Carpeta final.
@@ -497,7 +559,7 @@ def build_download_command(
     if request.mode == MODE_AUDIO:
 
         output_template = (
-            "%(title)s [%(id)s].%(ext)s"
+            f"{base_output_name}.%(ext)s"
         )
 
         command.extend([
@@ -536,23 +598,24 @@ def build_download_command(
             "mp4",
         ])
 
-        # ---------------------------------------------
+        # -------------------------------------------------
         # VIDEO COMPLETO
-        # ---------------------------------------------
+        # -------------------------------------------------
 
         if request.mode == MODE_VIDEO:
 
+            output_template = (
+                f"{base_output_name}.%(ext)s"
+            )
+
             command.extend([
                 "-o",
-                (
-                    "%(title)s "
-                    "[%(id)s].%(ext)s"
-                ),
+                output_template,
             ])
 
-        # ---------------------------------------------
+        # -------------------------------------------------
         # RECORTE
-        # ---------------------------------------------
+        # -------------------------------------------------
 
         else:
 
@@ -607,8 +670,7 @@ def build_download_command(
             )
 
             output_template = (
-                "%(title)s "
-                "[%(id)s] "
+                f"{base_output_name} "
                 f"[clip {start_filename}"
                 f"_to_{end_filename}]"
                 ".%(ext)s"
@@ -628,12 +690,17 @@ def build_download_command(
                     "--force-keyframes-at-cuts"
                 )
 
+    # -----------------------------------------------------
+    # MODO DESCONOCIDO
+    # -----------------------------------------------------
+
     else:
 
         raise ValueError(
             f"Modo desconocido: {request.mode}"
         )
 
+    # La URL siempre va al final.
     command.append(
         request.url
     )
