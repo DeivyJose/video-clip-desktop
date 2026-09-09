@@ -55,6 +55,10 @@ def main():
         APP_NAME
     )
 
+    app.setDesktopFileName(
+    "videoclip-desktop"
+    )
+
     app.setApplicationVersion(
         APP_VERSION
     )
