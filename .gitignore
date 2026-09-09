@@ -19,6 +19,8 @@ __pycache__/
 # Builds y empaquetado
 build/
 dist/
+release/
+*.AppImage
 *.spec
 
 # Pytest
@@ -27,6 +29,9 @@ dist/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Herramientas descargadas para empaquetado
+tools/appimagetool-x86_64.AppImage
 
 # Herramientas externas descargadas durante el build
 assets/bin/yt-dlp
