@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from app.runtime_tools import (
+    get_yt_dlp_command,
+)
 
 # ---------------------------------------------------------
 # Constantes
@@ -23,6 +26,9 @@ PROGRESS_PATTERN = re.compile(
     r"\[download\]\s+(\d+(?:\.\d+)?)%"
 )
 
+FINAL_FILE_MARKER = (
+    "__VIDEOCLIP_FINAL_FILE__="
+)
 
 # ---------------------------------------------------------
 # Modelos de datos
@@ -351,14 +357,12 @@ def get_video_info(
     )
 
     command = [
-        sys.executable,
-        "-m",
-        "yt_dlp",
+    *get_yt_dlp_command(),
 
-        "--dump-single-json",
-        "--skip-download",
-        "--no-playlist",
-    ]
+    "--dump-single-json",
+    "--skip-download",
+    "--no-playlist",
+]
 
     add_browser_cookies(
         command,
@@ -527,25 +531,31 @@ def build_download_command(
     # -----------------------------------------------------
 
     command = [
-        sys.executable,
-        "-m",
-        "yt_dlp",
+    *get_yt_dlp_command(),
 
-        # Hace que el progreso aparezca
-        # línea por línea.
-        "--newline",
+    "--newline",
 
-        # Por ahora no permitimos playlists.
-        "--no-playlist",
+    # --print activa quiet mode internamente.
+    # --progress obliga a mantener visible
+    # el progreso de descarga.
+    "--progress",
 
-        # Evita sobrescribir accidentalmente
-        # archivos existentes.
-        "--no-overwrites",
+    # yt-dlp imprimirá la ruta exacta después
+    # de todos los postprocesamientos.
+    "--print",
+    (
+        "after_move:"
+        f"{FINAL_FILE_MARKER}"
+        "%(filepath)s"
+    ),
 
-        # Carpeta final.
-        "-P",
-        destination,
-    ]
+    "--no-playlist",
+
+    "--no-overwrites",
+
+    "-P",
+    destination,
+]
 
     add_browser_cookies(
         command,
