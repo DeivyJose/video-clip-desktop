@@ -35,3 +35,8 @@ tools/appimagetool-x86_64.AppImage
 
 # Herramientas externas descargadas durante el build
 assets/bin/yt-dlp
+
+# Binarios externos descargados durante el build
+assets/bin/yt-dlp
+assets/bin/ffmpeg
+assets/bin/ffprobe

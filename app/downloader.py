@@ -1,7 +1,6 @@
 import argparse
 import json
 import re
-import shutil
 import subprocess
 import sys
 
@@ -10,8 +9,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from app.runtime_tools import (
+    get_bundled_ffmpeg_location,
+    get_ffmpeg_path,
+    get_ffprobe_path,
     get_yt_dlp_command,
 )
+
 
 # ---------------------------------------------------------
 # Constantes
@@ -26,9 +29,11 @@ PROGRESS_PATTERN = re.compile(
     r"\[download\]\s+(\d+(?:\.\d+)?)%"
 )
 
+
 FINAL_FILE_MARKER = (
     "__VIDEOCLIP_FINAL_FILE__="
 )
+
 
 # ---------------------------------------------------------
 # Modelos de datos
@@ -71,35 +76,44 @@ class DownloadRequest:
     # original del video.
     custom_name: str = ""
 
+
 # ---------------------------------------------------------
 # Validaciones
 # ---------------------------------------------------------
 
 def check_dependencies():
     """
-    Comprueba que FFmpeg exista en el sistema.
+    Comprueba que FFmpeg y ffprobe estén disponibles.
+
+    Primero busca los binarios incluidos dentro
+    de VideoClip Desktop.
+
+    Si no existen, intenta utilizar los instalados
+    en el sistema operativo.
     """
 
-    if shutil.which("ffmpeg") is None:
+    if get_ffmpeg_path() is None:
+
         raise RuntimeError(
-            "FFmpeg no está instalado o no se encuentra "
-            "en el PATH del sistema."
+            "FFmpeg no está disponible."
         )
 
-    if shutil.which("ffprobe") is None:
+    if get_ffprobe_path() is None:
+
         raise RuntimeError(
-            "ffprobe no está instalado. Normalmente viene "
-            "incluido junto con FFmpeg."
+            "ffprobe no está disponible."
         )
 
 
-def validate_url(url: str):
+def validate_url(
+    url: str
+):
     """
-    Comprueba que el texto tenga forma de URL HTTP/HTTPS.
+    Comprueba que el texto tenga forma
+    de URL HTTP/HTTPS.
 
-    No nos limitamos estrictamente a youtube.com porque
-    yt-dlp puede funcionar con muchos sitios y esto nos
-    deja abierta esa posibilidad para el futuro.
+    No nos limitamos estrictamente a YouTube
+    porque yt-dlp soporta otros sitios.
     """
 
     parsed = urlparse(
@@ -110,11 +124,14 @@ def validate_url(url: str):
         "http",
         "https"
     }:
+
         raise ValueError(
-            "La URL debe comenzar con http:// o https://"
+            "La URL debe comenzar con "
+            "http:// o https://"
         )
 
     if not parsed.netloc:
+
         raise ValueError(
             "La URL no parece válida."
         )
@@ -124,34 +141,40 @@ def validate_url(url: str):
 # Manejo de tiempos
 # ---------------------------------------------------------
 
-def time_to_seconds(value: str) -> int:
+def time_to_seconds(
+    value: str
+) -> int:
     """
-    Convierte distintos formatos de tiempo a segundos.
+    Convierte distintos formatos de tiempo
+    a segundos.
 
     Ejemplos:
 
     30
     01:30
     00:01:30
-
-    Todos representan cantidades de tiempo.
     """
 
     value = value.strip()
 
     if not value:
+
         raise ValueError(
             "El tiempo no puede estar vacío."
         )
 
-    parts = value.split(":")
+    parts = value.split(
+        ":"
+    )
 
     if len(parts) > 3:
+
         raise ValueError(
             "Formato de tiempo inválido."
         )
 
     try:
+
         numbers = [
             int(part)
             for part in parts
@@ -160,14 +183,15 @@ def time_to_seconds(value: str) -> int:
     except ValueError as error:
 
         raise ValueError(
-            "El tiempo solo puede contener números "
-            "separados por ':'."
+            "El tiempo solo puede contener "
+            "números separados por ':'."
         ) from error
 
     if any(
         number < 0
         for number in numbers
     ):
+
         raise ValueError(
             "El tiempo no puede ser negativo."
         )
@@ -175,17 +199,22 @@ def time_to_seconds(value: str) -> int:
     # Ejemplo:
     # 30
     if len(numbers) == 1:
+
         return numbers[0]
 
     # Ejemplo:
     # 01:30
     if len(numbers) == 2:
 
-        minutes, seconds = numbers
+        minutes, seconds = (
+            numbers
+        )
 
         if seconds >= 60:
+
             raise ValueError(
-                "Los segundos deben ser menores de 60."
+                "Los segundos deben ser "
+                "menores de 60."
             )
 
         return (
@@ -195,16 +224,23 @@ def time_to_seconds(value: str) -> int:
 
     # Ejemplo:
     # 01:05:30
-    hours, minutes, seconds = numbers
+
+    hours, minutes, seconds = (
+        numbers
+    )
 
     if minutes >= 60:
+
         raise ValueError(
-            "Los minutos deben ser menores de 60."
+            "Los minutos deben ser "
+            "menores de 60."
         )
 
     if seconds >= 60:
+
         raise ValueError(
-            "Los segundos deben ser menores de 60."
+            "Los segundos deben ser "
+            "menores de 60."
         )
 
     return (
@@ -250,7 +286,7 @@ def filename_timestamp(
 
     00-01-25
 
-    para utilizarlo cómodamente dentro del nombre
+    para utilizarlo dentro del nombre
     de un archivo.
     """
 
@@ -258,8 +294,10 @@ def filename_timestamp(
         value
     )
 
-    timestamp = seconds_to_timestamp(
-        seconds
+    timestamp = (
+        seconds_to_timestamp(
+            seconds
+        )
     )
 
     return timestamp.replace(
@@ -276,10 +314,12 @@ def get_format_selector(
     quality: str
 ) -> str:
     """
-    Devuelve el selector de formatos que utilizará yt-dlp.
+    Devuelve el selector de formatos
+    utilizado por yt-dlp.
     """
 
     formats = {
+
         "best": (
             "bv*[ext=mp4]+ba[ext=m4a]/"
             "b[ext=mp4]/"
@@ -312,11 +352,15 @@ def get_format_selector(
     }
 
     if quality not in formats:
+
         raise ValueError(
-            f"Calidad no reconocida: {quality}"
+            f"Calidad no reconocida: "
+            f"{quality}"
         )
 
-    return formats[quality]
+    return formats[
+        quality
+    ]
 
 
 # ---------------------------------------------------------
@@ -328,20 +372,21 @@ def add_browser_cookies(
     use_brave_cookies: bool
 ):
     """
-    Si el usuario lo solicita, yt-dlp intentará utilizar
-    la sesión existente de Brave.
+    Si el usuario lo solicita,
+    yt-dlp intentará utilizar la sesión
+    existente de Brave.
     """
 
     if use_brave_cookies:
 
         command.extend([
             "--cookies-from-browser",
-            "brave"
+            "brave",
         ])
 
 
 # ---------------------------------------------------------
-# Analizar un video
+# Analizar video
 # ---------------------------------------------------------
 
 def get_video_info(
@@ -349,7 +394,8 @@ def get_video_info(
     use_brave_cookies: bool = False
 ) -> VideoInfo:
     """
-    Obtiene información del video sin descargarlo.
+    Obtiene información del video
+    sin descargarlo.
     """
 
     validate_url(
@@ -357,12 +403,12 @@ def get_video_info(
     )
 
     command = [
-    *get_yt_dlp_command(),
+        *get_yt_dlp_command(),
 
-    "--dump-single-json",
-    "--skip-download",
-    "--no-playlist",
-]
+        "--dump-single-json",
+        "--skip-download",
+        "--no-playlist",
+    ]
 
     add_browser_cookies(
         command,
@@ -375,8 +421,11 @@ def get_video_info(
 
     result = subprocess.run(
         command,
+
         capture_output=True,
+
         text=True,
+
         check=False
     )
 
@@ -406,20 +455,30 @@ def get_video_info(
         ) from error
 
     duration = int(
-        data.get("duration")
+        data.get(
+            "duration"
+        )
         or 0
     )
 
     return VideoInfo(
+
         title=(
-            data.get("title")
-            or "Sin título"
+            data.get(
+                "title"
+            )
+            or
+            "Sin título"
         ),
 
         channel=(
-            data.get("channel")
+            data.get(
+                "channel"
+            )
             or
-            data.get("uploader")
+            data.get(
+                "uploader"
+            )
             or
             "Desconocido"
         ),
@@ -427,15 +486,21 @@ def get_video_info(
         duration=duration,
 
         duration_text=(
-            data.get("duration_string")
-            or seconds_to_timestamp(
+            data.get(
+                "duration_string"
+            )
+            or
+            seconds_to_timestamp(
                 duration
             )
         ),
 
         webpage_url=(
-            data.get("webpage_url")
-            or url
+            data.get(
+                "webpage_url"
+            )
+            or
+            url
         ),
 
         thumbnail=data.get(
@@ -444,14 +509,20 @@ def get_video_info(
     )
 
 
-def sanitize_filename(name: str) -> str:
+# ---------------------------------------------------------
+# Nombre personalizado
+# ---------------------------------------------------------
+
+def sanitize_filename(
+    name: str
+) -> str:
     """
     Limpia un nombre personalizado para evitar
-    caracteres problemáticos en Linux, Windows
-    y macOS.
+    caracteres problemáticos en Linux,
+    Windows y macOS.
 
-    También eliminamos '%' porque yt-dlp utiliza
-    ese carácter en sus plantillas.
+    También eliminamos '%' porque yt-dlp
+    utiliza ese carácter en sus plantillas.
     """
 
     name = name.strip()
@@ -460,18 +531,22 @@ def sanitize_filename(name: str) -> str:
         '<>:"/\\|?*%'
     )
 
-    for character in invalid_characters:
+    for character in (
+        invalid_characters
+    ):
+
         name = name.replace(
             character,
             "_"
         )
 
-    # Evitamos espacios repetidos.
+    # Evita espacios repetidos.
     name = " ".join(
         name.split()
     )
 
-    # Evitamos nombres terminados en punto o espacio.
+    # Evita nombres terminados
+    # en punto o espacio.
     name = name.rstrip(
         ". "
     )
@@ -480,7 +555,7 @@ def sanitize_filename(name: str) -> str:
 
 
 # ---------------------------------------------------------
-# Crear el comando de yt-dlp
+# Crear comando de yt-dlp
 # ---------------------------------------------------------
 
 def build_download_command(
@@ -489,8 +564,7 @@ def build_download_command(
     """
     Construye el comando que ejecutará yt-dlp.
 
-    Importante:
-    esta función todavía NO descarga nada.
+    Esta función NO ejecuta todavía la descarga.
     Solo prepara las instrucciones.
     """
 
@@ -510,8 +584,10 @@ def build_download_command(
     # NOMBRE DEL ARCHIVO
     # -----------------------------------------------------
 
-    custom_name = sanitize_filename(
-        request.custom_name
+    custom_name = (
+        sanitize_filename(
+            request.custom_name
+        )
     )
 
     if custom_name:
@@ -531,36 +607,59 @@ def build_download_command(
     # -----------------------------------------------------
 
     command = [
-    *get_yt_dlp_command(),
+        *get_yt_dlp_command(),
 
-    "--newline",
+        # Hace que el progreso salga
+        # línea por línea.
+        "--newline",
 
-    # --print activa quiet mode internamente.
-    # --progress obliga a mantener visible
-    # el progreso de descarga.
-    "--progress",
+        # --print puede activar modo silencioso,
+        # por eso forzamos mostrar progreso.
+        "--progress",
 
-    # yt-dlp imprimirá la ruta exacta después
-    # de todos los postprocesamientos.
-    "--print",
-    (
-        "after_move:"
-        f"{FINAL_FILE_MARKER}"
-        "%(filepath)s"
-    ),
+        # Nos informa la ruta final después
+        # de FFmpeg y otros postprocesamientos.
+        "--print",
+        (
+            "after_move:"
+            f"{FINAL_FILE_MARKER}"
+            "%(filepath)s"
+        ),
 
-    "--no-playlist",
+        # No descargar listas completas.
+        "--no-playlist",
 
-    "--no-overwrites",
+        # No sobrescribir archivos existentes.
+        "--no-overwrites",
 
-    "-P",
-    destination,
-]
+        # Carpeta de destino.
+        "-P",
+        destination,
+    ]
+
+    # -----------------------------------------------------
+    # COOKIES
+    # -----------------------------------------------------
 
     add_browser_cookies(
         command,
         request.use_brave_cookies
     )
+
+    # -----------------------------------------------------
+    # FFMPEG INCLUIDO
+    # -----------------------------------------------------
+
+    ffmpeg_location = (
+        get_bundled_ffmpeg_location()
+    )
+
+    if ffmpeg_location:
+
+        command.extend([
+            "--ffmpeg-location",
+            ffmpeg_location,
+        ])
 
     # -----------------------------------------------------
     # MODO AUDIO
@@ -569,7 +668,8 @@ def build_download_command(
     if request.mode == MODE_AUDIO:
 
         output_template = (
-            f"{base_output_name}.%(ext)s"
+            f"{base_output_name}"
+            ".%(ext)s"
         )
 
         command.extend([
@@ -612,10 +712,15 @@ def build_download_command(
         # VIDEO COMPLETO
         # -------------------------------------------------
 
-        if request.mode == MODE_VIDEO:
+        if (
+            request.mode
+            ==
+            MODE_VIDEO
+        ):
 
             output_template = (
-                f"{base_output_name}.%(ext)s"
+                f"{base_output_name}"
+                ".%(ext)s"
             )
 
             command.extend([
@@ -641,7 +746,11 @@ def build_download_command(
                 )
             )
 
-            if end_seconds <= start_seconds:
+            if (
+                end_seconds
+                <=
+                start_seconds
+            ):
 
                 raise ValueError(
                     "El tiempo final debe ser mayor "
@@ -681,8 +790,11 @@ def build_download_command(
 
             output_template = (
                 f"{base_output_name} "
-                f"[clip {start_filename}"
-                f"_to_{end_filename}]"
+                f"[clip "
+                f"{start_filename}"
+                f"_to_"
+                f"{end_filename}"
+                f"]"
                 ".%(ext)s"
             )
 
@@ -707,10 +819,11 @@ def build_download_command(
     else:
 
         raise ValueError(
-            f"Modo desconocido: {request.mode}"
+            f"Modo desconocido: "
+            f"{request.mode}"
         )
 
-    # La URL siempre va al final.
+    # URL siempre al final.
     command.append(
         request.url
     )
@@ -719,18 +832,19 @@ def build_download_command(
 
 
 # ---------------------------------------------------------
-# Ejecutar la descarga
+# Ejecutar descarga
 # ---------------------------------------------------------
 
 def download(
     request: DownloadRequest
 ):
     """
-    Ejecuta la descarga y muestra el progreso
-    en la terminal.
+    Ejecuta la descarga y muestra
+    el progreso en la terminal.
 
-    Más adelante la interfaz gráfica escuchará
-    este mismo proceso.
+    La GUI tiene su propio worker,
+    pero este método sigue siendo útil
+    para pruebas.
     """
 
     check_dependencies()
@@ -748,17 +862,22 @@ def download(
         exist_ok=True
     )
 
-    command = build_download_command(
-        request
+    command = (
+        build_download_command(
+            request
+        )
     )
 
     print()
+
     print(
         "Iniciando yt-dlp..."
     )
+
     print(
         f"Destino: {destination}"
     )
+
     print()
 
     process = subprocess.Popen(
@@ -776,10 +895,13 @@ def download(
     if process.stdout is None:
 
         raise RuntimeError(
-            "No se pudo leer la salida de yt-dlp."
+            "No se pudo leer la salida "
+            "de yt-dlp."
         )
 
-    for line in process.stdout:
+    for line in (
+        process.stdout
+    ):
 
         line = line.rstrip()
 
@@ -790,10 +912,11 @@ def download(
             line
         )
 
-        # Más adelante utilizaremos este porcentaje
-        # para alimentar la barra de progreso.
-        match = PROGRESS_PATTERN.search(
-            line
+        match = (
+            PROGRESS_PATTERN
+            .search(
+                line
+            )
         )
 
         if match:
@@ -802,12 +925,11 @@ def download(
                 match.group(1)
             )
 
-            # Por ahora simplemente tenemos disponible
-            # la variable percentage.
-            # La GUI la utilizará después.
             _ = percentage
 
-    return_code = process.wait()
+    return_code = (
+        process.wait()
+    )
 
     if return_code != 0:
 
@@ -816,24 +938,24 @@ def download(
         )
 
     print()
+
     print(
         "Proceso completado correctamente."
     )
+
     print(
-        f"Archivos guardados en: {destination}"
+        f"Archivos guardados en: "
+        f"{destination}"
     )
 
 
 # ---------------------------------------------------------
-# Interfaz temporal para probar desde terminal
+# Interfaz temporal de terminal
 # ---------------------------------------------------------
 
 def create_parser():
     """
-    Crea los comandos de prueba.
-
-    Esto desaparecerá o quedará como herramienta
-    secundaria cuando tengamos la GUI.
+    Crea los comandos de prueba desde terminal.
     """
 
     parser = argparse.ArgumentParser(
@@ -843,9 +965,11 @@ def create_parser():
         )
     )
 
-    subparsers = parser.add_subparsers(
-        dest="command",
-        required=True
+    subparsers = (
+        parser.add_subparsers(
+            dest="command",
+            required=True
+        )
     )
 
     # -----------------------------------------------------
@@ -855,7 +979,10 @@ def create_parser():
     analyze_parser = (
         subparsers.add_parser(
             "analyze",
-            help="Analizar un video sin descargarlo"
+            help=(
+                "Analizar un video "
+                "sin descargarlo"
+            )
         )
     )
 
@@ -870,13 +997,15 @@ def create_parser():
     )
 
     # -----------------------------------------------------
-    # DESCARGAR VIDEO COMPLETO
+    # VIDEO COMPLETO
     # -----------------------------------------------------
 
     video_parser = (
         subparsers.add_parser(
             "video",
-            help="Descargar video completo"
+            help=(
+                "Descargar video completo"
+            )
         )
     )
 
@@ -893,12 +1022,14 @@ def create_parser():
     video_parser.add_argument(
         "-q",
         "--quality",
+
         choices=[
             "best",
             "1080p",
             "720p",
-            "480p"
+            "480p",
         ],
+
         default="best"
     )
 
@@ -914,7 +1045,10 @@ def create_parser():
     clip_parser = (
         subparsers.add_parser(
             "clip",
-            help="Descargar solamente una sección"
+            help=(
+                "Descargar solamente "
+                "una sección"
+            )
         )
     )
 
@@ -943,21 +1077,25 @@ def create_parser():
     clip_parser.add_argument(
         "-q",
         "--quality",
+
         choices=[
             "best",
             "1080p",
             "720p",
-            "480p"
+            "480p",
         ],
+
         default="best"
     )
 
     clip_parser.add_argument(
         "--fast-cut",
         action="store_true",
+
         help=(
             "No forzar keyframes. "
-            "Es más rápido, pero menos preciso."
+            "Es más rápido, "
+            "pero menos preciso."
         )
     )
 
@@ -973,7 +1111,9 @@ def create_parser():
     audio_parser = (
         subparsers.add_parser(
             "audio",
-            help="Extraer el audio como MP3"
+            help=(
+                "Extraer el audio como MP3"
+            )
         )
     )
 
@@ -997,12 +1137,16 @@ def create_parser():
 
 def main():
     """
-    Entrada temporal por terminal.
+    Entrada por terminal.
     """
 
-    parser = create_parser()
+    parser = (
+        create_parser()
+    )
 
-    args = parser.parse_args()
+    args = (
+        parser.parse_args()
+    )
 
     try:
 
@@ -1010,28 +1154,42 @@ def main():
         # ANALIZAR
         # -------------------------------------------------
 
-        if args.command == "analyze":
+        if (
+            args.command
+            ==
+            "analyze"
+        ):
 
-            info = get_video_info(
-                args.url,
-                use_brave_cookies=args.brave
+            info = (
+                get_video_info(
+                    args.url,
+
+                    use_brave_cookies=(
+                        args.brave
+                    )
+                )
             )
 
             print()
+
             print(
-                f"Título:   {info.title}"
+                f"Título:   "
+                f"{info.title}"
             )
 
             print(
-                f"Canal:    {info.channel}"
+                f"Canal:    "
+                f"{info.channel}"
             )
 
             print(
-                f"Duración: {info.duration_text}"
+                f"Duración: "
+                f"{info.duration_text}"
             )
 
             print(
-                f"URL:      {info.webpage_url}"
+                f"URL:      "
+                f"{info.webpage_url}"
             )
 
             return
@@ -1040,31 +1198,68 @@ def main():
         # VIDEO COMPLETO
         # -------------------------------------------------
 
-        if args.command == "video":
+        if (
+            args.command
+            ==
+            "video"
+        ):
 
             request = DownloadRequest(
                 url=args.url,
-                destination=args.output,
+
+                destination=(
+                    args.output
+                ),
+
                 mode=MODE_VIDEO,
-                quality=args.quality,
-                use_brave_cookies=args.brave
+
+                quality=(
+                    args.quality
+                ),
+
+                use_brave_cookies=(
+                    args.brave
+                )
             )
 
         # -------------------------------------------------
         # CLIP
         # -------------------------------------------------
 
-        elif args.command == "clip":
+        elif (
+            args.command
+            ==
+            "clip"
+        ):
 
             request = DownloadRequest(
                 url=args.url,
-                destination=args.output,
+
+                destination=(
+                    args.output
+                ),
+
                 mode=MODE_CLIP,
-                quality=args.quality,
-                start_time=args.start,
-                end_time=args.end,
-                precise_cut=not args.fast_cut,
-                use_brave_cookies=args.brave
+
+                quality=(
+                    args.quality
+                ),
+
+                start_time=(
+                    args.start
+                ),
+
+                end_time=(
+                    args.end
+                ),
+
+                precise_cut=(
+                    not args.fast_cut
+                ),
+
+                use_brave_cookies=(
+                    args.brave
+                )
             )
 
         # -------------------------------------------------
@@ -1075,9 +1270,16 @@ def main():
 
             request = DownloadRequest(
                 url=args.url,
-                destination=args.output,
+
+                destination=(
+                    args.output
+                ),
+
                 mode=MODE_AUDIO,
-                use_brave_cookies=args.brave
+
+                use_brave_cookies=(
+                    args.brave
+                )
             )
 
         download(
@@ -1090,11 +1292,14 @@ def main():
     ) as error:
 
         print()
+
         print(
             f"ERROR: {error}"
         )
 
-        sys.exit(1)
+        sys.exit(
+            1
+        )
 
 
 if __name__ == "__main__":

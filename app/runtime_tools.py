@@ -4,15 +4,39 @@ import sys
 from pathlib import Path
 
 
-# ---------------------------------------------------------
-# RUTAS
-# ---------------------------------------------------------
+# =========================================================
+# RUTAS DE EJECUCIÓN
+# =========================================================
 
-APP_ROOT = (
-    Path(__file__)
-    .resolve()
-    .parents[1]
-)
+def get_app_root() -> Path:
+    """
+    Devuelve la raíz real de VideoClip Desktop.
+
+    Funciona tanto:
+
+    - ejecutando desde Python
+    - dentro de PyInstaller
+    - dentro del AppImage
+    """
+
+    if getattr(
+        sys,
+        "frozen",
+        False
+    ):
+
+        return Path(
+            sys._MEIPASS
+        )
+
+    return (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+    )
+
+
+APP_ROOT = get_app_root()
 
 BUNDLED_BIN_DIR = (
     APP_ROOT
@@ -21,35 +45,25 @@ BUNDLED_BIN_DIR = (
 )
 
 
+# =========================================================
+# YT-DLP
+# =========================================================
+
 def get_yt_dlp_command() -> list[str]:
     """
     Decide cómo ejecutar yt-dlp.
-
-    Prioridad:
-
-    1. Binario incluido con VideoClip Desktop.
-    2. yt-dlp instalado en el sistema.
-    3. Módulo Python del entorno actual.
     """
 
-    # -----------------------------------------------------
-    # BINARIO INCLUIDO
-    # -----------------------------------------------------
-
-    bundled_yt_dlp = (
+    bundled = (
         BUNDLED_BIN_DIR
         / "yt-dlp"
     )
 
-    if bundled_yt_dlp.is_file():
+    if bundled.is_file():
 
         return [
-            str(bundled_yt_dlp)
+            str(bundled)
         ]
-
-    # -----------------------------------------------------
-    # INSTALACIÓN DEL SISTEMA
-    # -----------------------------------------------------
 
     system_yt_dlp = shutil.which(
         "yt-dlp"
@@ -61,12 +75,100 @@ def get_yt_dlp_command() -> list[str]:
             system_yt_dlp
         ]
 
-    # -----------------------------------------------------
-    # ENTORNO PYTHON
-    # -----------------------------------------------------
+    # En desarrollo todavía podemos usar
+    # el módulo Python.
+    if not getattr(
+        sys,
+        "frozen",
+        False
+    ):
 
-    return [
-        sys.executable,
-        "-m",
-        "yt_dlp",
-    ]
+        return [
+            sys.executable,
+            "-m",
+            "yt_dlp",
+        ]
+
+    raise RuntimeError(
+        "No se encontró yt-dlp."
+    )
+
+
+# =========================================================
+# FFMPEG
+# =========================================================
+
+def get_ffmpeg_path() -> str | None:
+    """
+    Devuelve ffmpeg incluido o el instalado
+    en el sistema.
+    """
+
+    bundled = (
+        BUNDLED_BIN_DIR
+        / "ffmpeg"
+    )
+
+    if bundled.is_file():
+
+        return str(
+            bundled
+        )
+
+    return shutil.which(
+        "ffmpeg"
+    )
+
+
+def get_ffprobe_path() -> str | None:
+    """
+    Devuelve ffprobe incluido o el instalado
+    en el sistema.
+    """
+
+    bundled = (
+        BUNDLED_BIN_DIR
+        / "ffprobe"
+    )
+
+    if bundled.is_file():
+
+        return str(
+            bundled
+        )
+
+    return shutil.which(
+        "ffprobe"
+    )
+
+
+def get_bundled_ffmpeg_location() -> str | None:
+    """
+    Si ffmpeg y ffprobe están incluidos con
+    VideoClip Desktop, devuelve su directorio.
+
+    yt-dlp recibirá este directorio mediante
+    --ffmpeg-location.
+    """
+
+    ffmpeg = (
+        BUNDLED_BIN_DIR
+        / "ffmpeg"
+    )
+
+    ffprobe = (
+        BUNDLED_BIN_DIR
+        / "ffprobe"
+    )
+
+    if (
+        ffmpeg.is_file()
+        and
+        ffprobe.is_file()
+    ):
+
+        return str(
+            BUNDLED_BIN_DIR
+        )
+
+    return None
