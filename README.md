@@ -1,7 +1,8 @@
 # VideoClip Desktop
 
 <p align="center">
-  <img src="assets/icons/videoclip-desktop.png" width="160" alt="VideoClip Desktop">
+ <img width="256" height="256" alt="videoclip-desktop-256" src="https://github.com/user-attachments/assets/7a34a77f-9a48-4234-9e4d-2e9952d7f196" 
+ width="160" alt="VideoClip Desktop">
 </p>
 
 <h1 align="center">VideoClip Desktop</h1>
